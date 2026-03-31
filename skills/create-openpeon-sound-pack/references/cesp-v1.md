@@ -1,3 +1,5 @@
+> Source: https://github.com/PeonPing/openpeon/blob/main/spec/cesp-v1.md
+
 # Coding Event Sound Pack Specification (CESP) v1.0
 
 **Status:** Released

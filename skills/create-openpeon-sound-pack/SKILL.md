@@ -20,8 +20,9 @@ Progress:
 - [ ] Step 5: Normalize file names
 - [ ] Step 6: Generate openpeon.json manifest
 - [ ] Step 7: Create README, LICENSE, .gitignore
-- [ ] Step 8: Push to GitHub with version tag
-- [ ] Step 9: Submit registry PR
+- [ ] Step 8: Push to GitHub
+- [ ] Step 9: Create version tag with quality gate
+- [ ] Step 10: Submit registry PR
 
 ## Step 1: Prepare audio files
 
@@ -46,8 +47,20 @@ my-pack/
 
 **This step is critical. The registry CI will reject your pack if quality checks fail.**
 
-Use ffmpeg silencedetect to scan all files and flag any exceeding the thresholds below:
+Use the official quality check script (same logic as CI) to scan all files:
 
+```bash
+python3 .agents/skills/create-openpeon-sound-pack/scripts/quality-check.py <pack-dir>
+```
+
+Example:
+```bash
+python3 .agents/skills/create-openpeon-sound-pack/scripts/quality-check.py my-pack
+```
+
+The script outputs GOLD / SILVER / REJECTED with file-level details. Fix all BLOCK issues before proceeding. WARN issues are not blocking.
+
+Fallback (manual ffmpeg scan):
 ```bash
 for f in sounds/*; do
   echo "=== $f ===";
@@ -98,9 +111,11 @@ File names must match `[a-zA-Z0-9._-]+` -- no spaces, no Unicode.
 
 Recommended: English kebab-case (e.g., `welcome-to-kings-canyon.wav`).
 
-**After renaming files, verify every `file` field in openpeon.json points to an existing file.** This is a common mistake -- updating the manifest without renaming actual files, or vice versa.
+When updating an existing pack: after renaming files, verify every `file` field in openpeon.json still points to an existing file. This is a common mistake — updating the manifest without renaming actual files, or vice versa. (For a new pack, openpeon.json is generated in Step 6 after renaming is done.)
 
 ## Step 6: Generate openpeon.json manifest
+
+See `references/openpeon.schema.json` for the authoritative field definitions and constraints.
 
 **Required fields** (cesp_version, name, display_name, version, categories) + **recommended fields** (author, license, language, description):
 
@@ -142,9 +157,19 @@ Use a script to generate the full manifest to avoid JSON errors (trailing commas
 
 Install commands format:
 ```bash
-peon packs install <pack_name>
+peon packs use --install <pack_name>
+```
+
+### Local testing before publishing
+
+Use `packs install-local` to test the pack without pushing to GitHub or the registry:
+
+```bash
+peon packs install-local /path/to/your/pack
 peon packs use <pack_name>
 ```
+
+This is the fastest feedback loop — no tagging, no PR, no waiting for CI.
 
 ## Step 8: Push to GitHub
 
@@ -154,10 +179,44 @@ Repo naming convention: `<username>/openpeon-<pack-name>` (e.g., `yourname/openp
 git init && git add -A
 git commit -m "feat: <Pack Name> voice pack for peon-ping"
 gh repo create openpeon-<pack-name> --public --description "<description>" --source . --push
-git tag v1.0.0 && git push origin v1.0.0
 ```
 
-## Step 9: Submit registry PR
+You can push multiple times if you discover issues and need to iterate. Tagging and release happen in the next step.
+
+## Step 9: Create Version Tag with Quality Gate
+
+**⚠️ Critical: Quality check must pass before tagging**
+
+Before creating a version tag, verify that your pack passes quality standards. A tag represents an official release — it must be GOLD or SILVER. The registry CI will reject any pack with BLOCK issues, wasting time and requiring a new version number.
+
+Run quality check (or re-run if you modified files since Step 3):
+
+```bash
+python3 .agents/skills/create-openpeon-sound-pack/scripts/quality-check.py <pack-dir>
+```
+
+Verify the output shows `Verdict: GOLD` or `Verdict: SILVER` (not REJECTED). WARN issues are acceptable and do not prevent release.
+
+If the verdict is REJECTED, fix the BLOCK issues, then commit, push, and re-run the quality check before tagging:
+
+```bash
+git add -A && git commit -m "fix: resolve quality check issues"
+git push
+python3 .agents/skills/create-openpeon-sound-pack/scripts/quality-check.py <pack-dir>
+```
+
+Once quality check passes, create and push the tag:
+
+```bash
+git tag <version> && git push origin <version>
+# e.g. git tag v1.0.0 && git push origin v1.0.0
+```
+
+**Important notes on tags:**
+- Never force-push a tag. GitHub caches raw content (5 min to 24 hours). If you need to update files after tagging, create a new version (e.g., v1.0.1) instead.
+- A tag is immutable. Use it only when confident the pack is release-ready.
+
+## Step 10: Submit registry PR
 
 1. Fork `PeonPing/registry` (if not already forked): `gh repo fork PeonPing/registry --clone`
 2. If already forked and cloned, sync and pull latest:
@@ -191,6 +250,8 @@ find . -type f | xargs stat -f%z | awk '{s+=$1} END {print s}'
 
 5. Add entry to `index.json` in alphabetical order by `name`. `preview_sounds` should list 2-3 representative filenames (just the filename, not the full path) that give a good sample of the pack's character.
 
+See `references/registry-entry.schema.json` for the authoritative field definitions.
+
 Registry entry format:
 
 ```json
@@ -207,7 +268,7 @@ Registry entry format:
   "sound_count": 80,
   "total_size_bytes": 30000000,
   "source_repo": "user/repo-name",
-  "source_ref": "v1.0.0",
+  "source_ref": "<version>",
   "source_path": ".",
   "manifest_sha256": "...",
   "tags": ["gaming", "..."],
@@ -225,19 +286,36 @@ PR title convention: `Add <Pack Name> voice pack (<N> sounds)`
 git add index.json
 git commit -m "Add <Pack Name> voice pack"
 git push origin add-<pack-name>
-gh pr create --title "Add <Pack Name> voice pack (<N> sounds)" --body ""
+gh pr create --title "Add <Pack Name> voice pack (<N> sounds)" --body "$(cat <<'EOF'
+## Pack info
+- **Name**: <pack_name>
+- **Sounds**: <N> files across 6+ categories
+- **Language**: en
+- **License**: MIT
+
+## Quality check
+Passed local quality check: GOLD / SILVER
+EOF
+)"
 ```
 
 7. Wait for CI to pass. If it fails, check the PR issue comments for details.
 
 ## Gotchas
 
-- **Never force push a git tag.** GitHub caches `raw.githubusercontent.com` content (5 min to 24 hours). If you need to update files after tagging, create a new version (e.g., v1.0.1) instead.
 - **SHA256 chain reaction.** Any audio file change requires updating: (1) the file's sha256 in openpeon.json, (2) openpeon.json's sha256 in registry index.json, and (3) total_size_bytes in registry index.json.
 - **JSON editing by script only.** Hand-editing large JSON files leads to trailing commas and syntax errors. Use `python3 json.dump()` with `indent=2` and `ensure_ascii=False`.
 - **File name and manifest must stay in sync.** When renaming files, update both the actual file AND the `file` field in openpeon.json. Verify after every rename.
+- **Three-way sync when modifying an existing pack.** Any change to the sound list must be reflected in all three places: (1) `openpeon.json` — add/remove the entry and update sha256, (2) `sounds/` directory — deleting from JSON means deleting the file too; adding a file means adding the JSON entry too, (3) `README.md` Sound Map table — keep it in sync with actual JSON contents. Missing any one of these is a common mistake.
 - **Trailing silence is the #1 CI failure.** Always pre-check with ffmpeg before submitting. Block threshold is > 2000ms. Only trim what's necessary -- don't remove all silence.
 - **Copy first, rename later.** Always copy source audio with original names, verify correctness, then batch rename to ASCII.
 - **CI only checks blocking issues.** Warnings (e.g., dead air 500-2000ms, volume high) do not prevent the PR from passing. Only fix blocking issues to unblock CI.
 - **Check CI failure details in PR issue comments.** Use `gh api repos/<owner>/<repo>/issues/<pr_number>/comments` to see detailed quality report. PR review comments (`pulls/.../comments`) may be empty.
 - **Retrigger CI with a real file change.** Empty commits and `gh run rerun` may not work (no permission or workflow doesn't recognize them). Push a commit with actual file changes to reliably retrigger CI.
+
+## Bundled Resources
+
+- `scripts/quality-check.py` — Sourced from [PeonPing/registry](https://github.com/PeonPing/registry/blob/main/.github/scripts/quality-check.py). Same logic as registry CI.
+- `references/cesp-v1.md` — Sourced from [PeonPing/openpeon](https://github.com/PeonPing/openpeon/blob/main/spec/cesp-v1.md). Full CESP v1.0 specification.
+- `references/openpeon.schema.json` — Sourced from [PeonPing/openpeon](https://github.com/PeonPing/openpeon/blob/main/spec/openpeon.schema.json). JSON schema for openpeon.json manifest validation.
+- `references/registry-entry.schema.json` — Sourced from [PeonPing/openpeon](https://github.com/PeonPing/openpeon/blob/main/spec/registry-entry.schema.json). JSON schema for registry index.json entry validation.
