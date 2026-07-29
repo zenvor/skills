@@ -1,0 +1,12 @@
+{
+  "name": "deploy-minecraft-bedrock-server-tools",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@8crafter/leveldb-zlib": "1.6.0",
+    "prismarine-nbt": "2.8.0"
+  },
+  "overrides": {
+    "tar": "7.5.22"
+  }
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Minecraft 基岩版服务器部署与迁移"
+  short_description: "安全部署 BDS，并迁移基岩版世界与玩家数据"
+  default_prompt: "Use $deploy-minecraft-bedrock-server to safely deploy a Minecraft Bedrock server and migrate an existing Bedrock world with backups and verification."

@@ -1,2 +1,16 @@
 .DS_Store
 .vscode/
+node_modules/
+
+# Credentials and private operational artifacts
+*.pem
+*.key
+*.p12
+*.pfx
+*.log
+**/identity-spec*.json
+**/*migration-report*.json
+
+# Bedrock LevelDB files must never be published with a skill
+*.ldb
+*.sst
