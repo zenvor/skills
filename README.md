@@ -22,6 +22,7 @@ npx skills add https://github.com/zenvor/skills
 |------|-------------|
 | [create-openpeon-sound-pack](skills/create-openpeon-sound-pack/) | Creates and publishes CESP v1.0 compatible sound packs for peon-ping |
 | [minecraft-bedrock-server-deployment](skills/minecraft-bedrock-server-deployment/) | Safely assesses, deploys, migrates, and verifies Minecraft Bedrock servers |
+| [x-media-downloader](skills/x-media-downloader/) | Reliably archives every image and video from an X profile and organizes media by post |
 
 ## Compatibility
 
