@@ -1,0 +1,4 @@
+interface:
+  display_name: "X Media Download"
+  short_description: "Archive every hidden X media item and group files by post"
+  default_prompt: "Use $x-media-download to download every image and video from this X profile, expand multi-item posts, verify media IDs, and keep each post's files together chronologically."

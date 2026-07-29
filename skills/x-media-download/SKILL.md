@@ -1,10 +1,10 @@
 ---
-name: x-media-downloader
+name: x-media-download
 description: Reliably download and organize every image and video from an X/Twitter profile, including hidden media in multi-item posts. Use whenever the user asks to archive media from an X handle, profile, or `/media` page, especially when X uses lazy loading, stacked-media cards, sensitive-content covers, blob video playback, or when the archive must keep each post's photos and videos adjacent in chronological order.
 license: MIT. See LICENSE.txt
 ---
 
-# X Media Downloader
+# X Media Download
 
 Archive an X/Twitter media tab into a reproducible local folder without exporting raw browser cookies.
 
