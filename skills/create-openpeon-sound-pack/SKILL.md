@@ -1,7 +1,7 @@
 ---
 name: create-openpeon-sound-pack
 description: Creates and publishes CESP v1.0 compatible sound packs for peon-ping. ALWAYS use this skill when the user wants to create a new voice pack, build a sound pack, package audio for peon-ping, submit to the OpenPeon registry, or mentions peon sound pack, CESP categories, openpeon.json, or peon registry PR — even if they only mention part of the process.
-compatibility: Requires ffmpeg, python3, and gh (GitHub CLI) with authentication (run `gh auth login` first)
+license: MIT. See LICENSE.txt
 ---
 
 # Creating a peon-ping Sound Pack
@@ -9,6 +9,10 @@ compatibility: Requires ffmpeg, python3, and gh (GitHub CLI) with authentication
 Guide for creating and publishing CESP v1.0 compatible sound packs for peon-ping.
 
 CESP defines a universal format for sound packs that respond to coding events in agentic IDEs. A single pack works across Claude Code, Cursor, Codex, and any tool that implements the specification. The spec covers three things: a set of event categories that IDEs emit, a manifest format (openpeon.json) that maps categories to audio files, and player behavior requirements for how sounds should be played. For the full specification (including JSON schema), see [references/cesp-v1.md](references/cesp-v1.md).
+
+## Requirements
+
+Require `ffmpeg`, `python3`, and the GitHub CLI (`gh`). Authenticate `gh` before publishing by running `gh auth login`.
 
 ## Workflow
 
