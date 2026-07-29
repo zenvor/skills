@@ -1,5 +1,5 @@
 {
-  "name": "deploy-minecraft-bedrock-server-tools",
+  "name": "minecraft-bedrock-server-deployment-tools",
   "private": true,
   "type": "module",
   "dependencies": {

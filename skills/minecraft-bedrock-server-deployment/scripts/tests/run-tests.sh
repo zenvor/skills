@@ -389,4 +389,4 @@ else
   printf 'Skipped RakNet socket tests because SKIP_RAKNET_TESTS=true.\n'
 fi
 
-printf 'All deploy-minecraft-bedrock-server regression tests passed.\n'
+printf 'All minecraft-bedrock-server-deployment regression tests passed.\n'

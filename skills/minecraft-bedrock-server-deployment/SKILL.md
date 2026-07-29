@@ -1,10 +1,10 @@
 ---
-name: deploy-minecraft-bedrock-server
+name: minecraft-bedrock-server-deployment
 description: Safely assess Linux VPS hosts, deploy and operate Minecraft Bedrock Dedicated Server (BDS), import existing Bedrock/mobile worlds and add-ons, preserve player data, configure allowlists/operators, and verify networking, backups, and rollback. Use when asked to inspect or purchase a Bedrock host, install BDS, migrate a long-played phone/Bedrock world, bind behavior/resource packs, diagnose missing inventory after BDS import, or perform the community LevelDB owner-identity migration.
 license: MIT. See LICENSE.txt
 ---
 
-# Deploy Minecraft Bedrock Server
+# Minecraft Bedrock Server Deployment
 
 ## Interpret validation provenance
 
