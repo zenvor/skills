@@ -12,7 +12,8 @@ Archive an X/Twitter media tab into a reproducible local folder without exportin
 
 - Require network access to X and its media hosts.
 - Use a browser automation capability when authenticated, sensitive, virtualized, or hidden media must be inspected.
-- Require `yt-dlp` for video downloads and `ffmpeg`/`ffprobe` for stream merging and audio verification.
+- Require the `yt-dlp` executable—not the separate `yt-dlp` Agent Skill—for video downloads, plus `ffmpeg`/`ffprobe` for stream merging and audio verification.
+- If a compatible `yt-dlp` Agent Skill is available, use it as an optional collaborator for direct status-URL or HLS downloads. Do not hard-code another Skill's installation path.
 - Archive only media the user is authorized to access and copy. Follow applicable law and service terms; do not bypass private-account restrictions, paywalls, or technical access controls.
 - Treat the MIT license as applying to this Skill's files only, not to media downloaded from X.
 
@@ -137,6 +138,8 @@ Save explicit media-ID → status → master URL → local-path mappings in `vid
 ### 6. Download and merge videos
 
 Download discovered master playlists directly with `yt-dlp`. Explicitly provide `ffmpeg`'s directory when it is installed but absent from `PATH`, and prefer `--format "bv+ba/b"` plus `--merge-output-format mp4`.
+
+An available `yt-dlp` Agent Skill may execute these direct downloads, but this Skill retains responsibility for media inventory, identity mapping, reconciliation, organization, and final verification.
 
 - Do not force an MP4-only selector on generic Twitter master playlists.
 - Log start/success/failure per URL so one failure does not hide batch progress.
