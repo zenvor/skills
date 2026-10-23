@@ -75,7 +75,7 @@ class VerifyTests(unittest.TestCase):
         self.shared.mkdir()
         (self.root / '.direct-transfer-profile').write_text('test')
         self.status = {'state': 'idle', 'needBytes': 0, 'needFiles': 0, 'needDeletes': 0, 'errors': 0, 'pullErrors': 0,
-                       'globalFiles': 0, 'localFiles': 0, 'globalBytes': 0, 'localBytes': 0}
+                       'globalFiles': 0, 'localFiles': 0, 'globalBytes': 0, 'localBytes': 0, 'globalDirectories': 0, 'localDirectories': 0}
         self.folder_id = PROBE
         self.kind = 'receiveonly'
         test = self
@@ -116,8 +116,8 @@ class VerifyTests(unittest.TestCase):
     def manifest(self, mapping, name='source.json'):
         self.folder_id = 'user-files'
         entries = [{'path': n, 'bytes': len(b), 'sha256': hashlib.sha256(b).hexdigest()} for n, b in mapping.items()]
-        data = {'schema': 'syncthing-direct-manifest-v1', 'folderID': self.folder_id,
-                'fileCount': len(entries), 'totalBytes': sum(e['bytes'] for e in entries), 'files': entries}
+        data = {'schema': 'syncthing-direct-manifest-v2', 'folderID': self.folder_id,
+                'fileCount': len(entries), 'totalBytes': sum(e['bytes'] for e in entries), 'files': entries, 'directories': [], 'directoryCount': 0}
         path = self.root / name;path.write_text(json.dumps(data));return path
 
     def test_empty_index_and_connected_peer_are_not_file_completion(self):
@@ -155,6 +155,35 @@ class VerifyTests(unittest.TestCase):
         self.assertEqual(json.loads(path.read_text())['fileCount'], 1)
         self.assertNotEqual(self.control('manifest', '--folder-id', self.folder_id, '--out', path).returncode, 0)
         self.assertNotEqual(self.control('manifest', '--folder-id', self.folder_id, '--out', self.shared / 'manifest.json').returncode, 0)
+
+    def test_empty_directory_paths_and_indexes_are_verified(self):
+        mapping = {'a.txt': b'source file'}
+        manifest = self.manifest(mapping)
+        data = json.loads(manifest.read_text())
+        data.update(directories=['empty', 'empty/nested'], directoryCount=2)
+        manifest.write_text(json.dumps(data))
+        self.set_data(mapping)
+        self.assertNotEqual(self.control('verify', '--folder-id', self.folder_id, '--manifest', manifest).returncode, 0)
+        self.status.update(globalDirectories=2, localDirectories=2)
+        (self.shared / 'wrong').mkdir();(self.shared / 'wrong/nested').mkdir()
+        self.assertNotEqual(self.control('verify', '--folder-id', self.folder_id, '--manifest', manifest).returncode, 0)
+        (self.shared / 'wrong').rename(self.shared / 'empty')
+        result = self.control('verify', '--folder-id', self.folder_id, '--manifest', manifest)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)['directories'], ['empty', 'empty/nested'])
+        self.status['needDirectories'] = 1
+        self.assertNotEqual(self.control('verify', '--folder-id', self.folder_id, '--manifest', manifest).returncode, 0)
+
+    def test_manifest_exports_empty_directories_and_rejects_v1(self):
+        self.kind = 'sendonly';self.folder_id = 'user-files';self.set_data({'a.txt': b'source'})
+        (self.shared / 'empty').mkdir();self.status.update(globalDirectories=1, localDirectories=1)
+        path = self.root / 'directory-source.json'
+        result = self.control('manifest', '--folder-id', self.folder_id, '--out', path)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data = json.loads(path.read_text())
+        self.assertEqual(data['directories'], ['empty']);self.assertEqual(data['directoryCount'], 1)
+        data['schema'] = 'syncthing-direct-manifest-v1';path.write_text(json.dumps(data))
+        self.assertNotEqual(self.control('verify', '--folder-id', self.folder_id, '--manifest', path).returncode, 0)
 
 
 FAKE_BINARY = r'''#!/usr/bin/env python3

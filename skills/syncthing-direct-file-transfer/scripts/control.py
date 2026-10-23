@@ -55,13 +55,37 @@ def inventory(path, zip_crc=False):
     return files
 
 
+def directory_inventory(path):
+    directories = []
+    for item in sorted(path.rglob('*')):
+        relative = item.relative_to(path)
+        if any(part in {'.stfolder', '.stversions'} or part.startswith('.syncthing.') for part in relative.parts):
+            continue
+        if item.is_symlink():
+            raise ValueError('Unexpected symlink; inspect before verifying')
+        if item.is_dir():
+            directories.append(relative.as_posix())
+    return directories
+
+
+def canonical_path(value):
+    return isinstance(value, str) and bool(value) and not PurePosixPath(value).is_absolute() and '..' not in PurePosixPath(value).parts and PurePosixPath(value).as_posix() == value
+
+
+def expected_directories(manifest):
+    directories = manifest.get('directories')
+    if not isinstance(directories, list) or any(not canonical_path(p) for p in directories) or len(set(directories)) != len(directories) or manifest.get('directoryCount') != len(directories):
+        raise ValueError('Invalid source directory manifest; regenerate using this version')
+    return sorted(directories)
+
+
 def expected_files(manifest, folder_id):
-    if not isinstance(manifest, dict) or manifest.get('schema') != 'syncthing-direct-manifest-v1' or manifest.get('folderID') != folder_id:
+    if not isinstance(manifest, dict) or manifest.get('schema') != 'syncthing-direct-manifest-v2' or manifest.get('folderID') != folder_id:
         raise ValueError('Unexpected source manifest schema/folder ID')
     files = manifest.get('files')
     if not isinstance(files, list) or not files:
         raise ValueError('Expected a non-empty source file manifest')
-    paths = set()
+    paths = set(expected_directories(manifest))
     for item in files:
         if not isinstance(item, dict):
             raise ValueError('Invalid source manifest entry')
@@ -76,12 +100,14 @@ def expected_files(manifest, folder_id):
     return sorted(files, key=lambda f: f['path'])
 
 
-def require_complete(status, files):
+def require_complete(status, files, directories=()):
     size = sum(file['bytes'] for file in files)
-    if status.get('state') != 'idle' or any(status.get(k) for k in ['needBytes', 'needFiles', 'needDeletes', 'errors', 'pullErrors']):
+    if status.get('state') != 'idle' or any(status.get(k) for k in ['needBytes', 'needFiles', 'needDirectories', 'needSymlinks', 'needDeletes', 'errors', 'pullErrors']):
         raise ValueError('Transfer not complete and idle')
     if not files or status.get('globalFiles') != len(files) or status.get('localFiles') != len(files) or status.get('globalBytes') != size or status.get('localBytes') != size:
         raise ValueError('Expected source file count/bytes not yet present in both indexes')
+    if status.get('globalDirectories') != len(directories) or status.get('localDirectories') != len(directories) or status.get('globalSymlinks', 0) or status.get('localSymlinks', 0):
+        raise ValueError('Expected source directory count not yet present in both indexes')
 
 
 def write_report(destination, report, shared_path):
@@ -292,28 +318,36 @@ def main():
             raise ValueError('Create a source manifest on the send-only side')
         path = Path(data['path'])
         files = inventory(path)
-        require_complete(api('db/status?folder=' + urllib.parse.quote(args.folder_id)), files)
-        report = {'schema': 'syncthing-direct-manifest-v1', 'folderID': args.folder_id,
-                  'fileCount': len(files), 'totalBytes': sum(f['bytes'] for f in files), 'files': files}
+        directories = directory_inventory(path)
+        require_complete(api('db/status?folder=' + urllib.parse.quote(args.folder_id)), files, directories)
+        report = {'schema': 'syncthing-direct-manifest-v2', 'folderID': args.folder_id,
+                  'fileCount': len(files), 'directoryCount': len(directories), 'directories': directories,
+                  'totalBytes': sum(f['bytes'] for f in files), 'files': files}
         write_report(args.out, report, path)
         out(report)
     elif args.command == 'verify':
         data = folder(args.folder_id);path = Path(data['path'])
         if args.manifest:
-            expected = expected_files(json.loads(args.manifest.read_text(encoding='utf-8')), args.folder_id)
+            manifest = json.loads(args.manifest.read_text(encoding='utf-8'))
+            expected = expected_files(manifest, args.folder_id)
+            expected_dirs = expected_directories(manifest)
         else:
             if args.folder_id != 'p2p-direct-probe-v1' or not re.fullmatch(r'[0-9a-f]{64}', args.expected_sha256):
                 raise ValueError('Use a source manifest for user files; a sender hash is only sufficient for the fixed synthetic probe')
             expected = [{'path': 'direct-test-1MiB.bin', 'bytes': 1048576, 'sha256': args.expected_sha256}]
+            expected_dirs = []
         status = api('db/status?folder=' + urllib.parse.quote(args.folder_id))
-        require_complete(status, expected)
+        require_complete(status, expected, expected_dirs)
         files = inventory(path, args.zip_crc)
+        directories = directory_inventory(path)
+        if directories != expected_dirs:
+            raise ValueError('Received directory paths differ from the sender expectation')
         actual = [{k: f[k] for k in ['path', 'bytes', 'sha256']} for f in files]
         target = [{k: f[k] for k in ['path', 'bytes', 'sha256']} for f in expected]
         if sorted(actual, key=lambda f: f['path']) != sorted(target, key=lambda f: f['path']):
             raise ValueError('Received file names/sizes/SHA-256 differ from the sender expectation')
-        require_complete(api('db/status?folder=' + urllib.parse.quote(args.folder_id)), expected)
-        report = {'folderID': args.folder_id, 'relaysEnabled': False, 'sourceMatched': True, 'files': files}
+        require_complete(api('db/status?folder=' + urllib.parse.quote(args.folder_id)), expected, expected_dirs)
+        report = {'folderID': args.folder_id, 'relaysEnabled': False, 'sourceMatched': True, 'files': files, 'directories': directories}
         if args.report:
             write_report(args.report, report, path)
         out(report)
@@ -328,10 +362,10 @@ def main():
                 out({k: c.get(k) for k in ['connected', 'address', 'type']})
             if args.folder_id:
                 s = api('db/status?folder=' + urllib.parse.quote(args.folder_id))
-                out({k: s.get(k) for k in ['state', 'globalFiles', 'globalBytes', 'localFiles', 'localBytes', 'needBytes', 'needFiles', 'errors', 'pullErrors']})
+                out({k: s.get(k) for k in ['state', 'globalFiles', 'globalBytes', 'localFiles', 'localBytes', 'needBytes', 'needFiles', 'needDirectories', 'errors', 'pullErrors']})
                 if s.get('errors') or s.get('pullErrors'):
                     raise ValueError('Transfer errors; inspect logs')
-                checks.append(s.get('globalFiles', 0) > 0 and s.get('state') == 'idle' and s.get('localFiles') == s.get('globalFiles') and s.get('localBytes') == s.get('globalBytes') and not any(s.get(k) for k in ['needBytes', 'needFiles', 'needDeletes']))
+                checks.append(s.get('globalFiles', 0) > 0 and s.get('state') == 'idle' and s.get('localFiles') == s.get('globalFiles') and s.get('localBytes') == s.get('globalBytes') and s.get('localDirectories') == s.get('globalDirectories') and not any(s.get(k) for k in ['needBytes', 'needFiles', 'needDirectories', 'needSymlinks', 'needDeletes']))
             if all(checks):
                 return
             if time.monotonic() >= deadline:
