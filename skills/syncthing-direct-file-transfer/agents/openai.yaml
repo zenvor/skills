@@ -1,0 +1,4 @@
+interface:
+  display_name: "Syncthing 跨平台无中继直传"
+  short_description: "使用 Syncthing 无中继直传，按需分流并保留现有代理及 Codex 连通性"
+  default_prompt: "使用 $syncthing-direct-file-transfer 带 macOS / Windows 设备不走中继直传文件，按需处理代理分流，保留现有 TUN/VPN 和 Codex 连通性，并校验接收结果。"
