@@ -1,44 +1,40 @@
-# 平台选择与验证范围
+# 设备操作经验
 
-| 平台 | 使用方式 | 当前证据 |
-|---|---|---|
-| macOS Apple Silicon / Intel | python3，下载 macos-arm64/amd64 | 原流程有 macOS 公网 QUIC 成功；新版回归和双实例本地传输单独记录 |
-| Windows 10/11 x64 / ARM64 | PowerShell 中 py -3，下载 windows-amd64/arm64 | 已实现 Windows 分支；无真实 Windows 主机实测，进程锁/继承/停止、权限、防火墙和跨设备传输尚待原生验证 |
+## Windows 进程与防火墙
 
-不支持 Linux、32 位 Windows、手机启动器。不得把当前机器上的模拟 Windows 分支测试写成 Windows 实测。没有合适设备时交付可测试实现及原生验收步骤，不伪造测试结论。
-
-## Windows 启动
-
-先安装 Python 3.9+，检查 `py -3 --version`、`curl.exe --version` 与系统 Windows PowerShell 可用。启动器通过系统 CIM 读取进程命令及原生 API 核对创建时间；查询失败时拒绝猜测或停止不明进程。无需先安装代理软件。保留已运行的个人 Syncthing，另选新配置目录和空闲端口。
-
-PowerShell 示例，假设 scripts 在 `C:\Tools\syncthing-direct-file-transfer\scripts`（替换为实际解压或安装路径）：
+使用附带脚本时先检查 `py -3 --version`、`curl.exe --version` 与系统 Windows PowerShell/CIM。将[命令流程](commands.md)中的 `python3` 换成 `py -3`，路径换成本机带引号的绝对路径。例如从技能目录执行：
 
 ```powershell
-Set-Location "C:\Tools\syncthing-direct-file-transfer\scripts"
-# A 发送合成测试文件，前台终端保持运行。
-py -3 .\launch.py --root "$env:LOCALAPPDATA\SyncthingDirect\A" --sender
-# B 在另一台机器启动，替换为 A 的实际设备 ID。
-py -3 .\launch.py --root "$env:LOCALAPPDATA\SyncthingDirect\B" --peer "A_ID"
+py -3 .\scripts\launch.py --root "$env:LOCALAPPDATA\SyncthingDirect\A" --sender
+# 另开终端检查本次实例。
+py -3 .\scripts\control.py --root "$env:LOCALAPPDATA\SyncthingDirect\A" status
 ```
 
-后续配对、status、peer、wait、manifest、verify、pause 均使用 commands.md 中相同子命令，替换 python3 为 py -3，所有路径改为本机绝对路径。例如另开一个 PowerShell 查看或停止本次实例：
+已有个人 Syncthing 保持原样，临时传输另选配置目录和空闲端口。启动器用独占文件句柄保护配置，子进程也继承锁；强制结束父进程可能留下子进程，不要通过重写配置处理残留。
 
-```powershell
-py -3 .\control.py --root "$env:LOCALAPPDATA\SyncthingDirect\A" status
-py -3 .\control.py --root "$env:LOCALAPPDATA\SyncthingDirect\A" stop
-```
+前台优先 Control+C；后台用 `control.py --root ... stop`。它通过 PID、创建时间和命令只清理本次父子进程，API 离线也可使用；身份查询失败时不猜测。不要使用 `taskkill /IM syncthing.exe` 或停止所有 Python 进程。
 
-文件路径支持空格与中文；避免打开两个 launcher 操作同一 root。Windows 使用独占文件句柄并仅向本次子进程继承该句柄；强制结束 launcher 可能留下子进程，stop 通过记录的 PID/创建时间/命令只清理该配置。禁止 taskkill /IM syncthing.exe、停止所有 Python 或改写个人 Syncthing 配置。优先前台 Control+C；stop 在 Windows 先停止已验证子进程，再收尾父进程，不能依赖 TerminateProcess 执行 Python finally。
+防火墙按以下顺序核对：
 
-首次联网若 Windows 防火墙提示，核实程序路径是本次配置中的 syncthing.exe。按用户所需活动网络配置文件，仅允许该程序的同步 TCP/UDP；本技能默认 TCP 22000、UDP 22000（改端口则按实际值）。不要关闭防火墙或允许所有程序，GUI 8385 仅回环访问，不开放到外网。局域网防火墙放行不代表已解决运营商 NAT。
+1. 确认实际 `syncthing.exe` 路径、监听端口，以及承载流量网卡的 Public/Private 配置文件。TUN 与物理网卡可能不同。
+2. 检查匹配程序的显式入站阻止规则。显式阻止优先于允许，仅新增允许规则可能无效。
+3. 需要修正时只调整已核实且在授权范围内的程序规则，按活动配置文件放行实际同步 TCP/UDP 端口。附带脚本默认均为 22000；GUI 8385 只绑定回环，不开放到外网。
 
-代理分流是条件步骤，见 proxy-routing.md。无代理或未接管时直接跳过；v2rayN 不能粘贴 Clash 规则，按现场版本、内核、实际 syncthing.exe 路径进行局部分流。保留 Codex 的原有代理路径，不为传文件关闭 TUN/VPN。
+不通过关闭整个防火墙或改变网络类别绕过问题；本机放行不代表已解决上游 NAT。代理接管另按[代理分流](proxy-routing.md)判断。
 
-## 原生 Windows 验收清单（尚未执行）
+## Android 客户端接收
 
-1. 用含中文和空格的全新 root 启动，验证官方包校验、正确 exe、回环 API、中继关闭及显式 TCP/QUIC；拒绝已有无标记配置、占用端口和重复启动，原文件保持不变。
-2. 验证 Control+C、stop 在 API 离线/损坏配置时均可停止本次父子；强制结束父进程后，子进程仍阻止配置重写；PID/创建时间或命令不匹配时不停止其他进程。
-3. Windows↔Mac 或 Windows↔Windows 核对无中继实际主/次 TCP/QUIC，合成文件 SHA-256；再验收用户授权文件源清单（名称/大小/哈希）、索引与错误状态，必要时 ZIP CRC，完成后暂停接收目录。
-4. 无代理端跳过规则。有代理端按实际客户端验证局部分流，确认 Codex 仍正常通信；将客户端/内核、Windows 架构及 TCP/QUIC 类型记入证据。不能把一次 x64/TCP 验证推及 ARM64/QUIC。
+使用用户已有的客户端。配对设备与共享目录分别处理，不因添加设备自动共享已有目录或整个 Downloads。
 
-官方依据：[Windows 下载](https://syncthing.net/downloads/)、[防火墙](https://docs.syncthing.net/users/firewall.html)、[Microsoft 句柄继承](https://learn.microsoft.com/en-us/windows/win32/procthread/inheritance)。
+1. 核对设备 ID、目录 ID、共享范围及收发方向。接受发送端提供的目录，或用相同目录 ID 手动添加，只选择本次发送设备。
+2. 优先用原生文件夹选择器，在内部共享存储创建独立接收目录。保存前核对完整绝对路径，例如 `/storage/emulated/0/Transfer-Inbox`，不要复用桌面路径。
+3. 单向接收使用 `receiveonly`。遇到只读或建目录失败，先检查是否误指根目录、路径前多了文字，以及位置是否可写。确认真实权限限制后，再按客户端、Android 版本和用户授权授予所需权限。
+4. 需要重建错误目录配置时，先确认它确属本次且为空，仅移除错误配置，不删除已有文件。已含数据时先确认保留与迁移方式。
+5. 检查实际接收字节增长、无路径错误及当前 TCP/QUIC 连接。`isLocal=true` 或下载开始都不代表文件已验收，最终按源清单核对。
+
+这里使用客户端原生界面或其适用接口，不能把专用配置的 `control.py` 命令直接套到手机上。
+
+## 官方参考
+
+- [Syncthing 防火墙](https://docs.syncthing.net/users/firewall.html)
+- [Windows 句柄继承](https://learn.microsoft.com/en-us/windows/win32/procthread/inheritance)
