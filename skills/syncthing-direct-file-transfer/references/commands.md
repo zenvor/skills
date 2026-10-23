@@ -51,7 +51,7 @@ python3 control.py --root /工作目录/B verify --folder-id p2p-direct-probe-v1
 
 若 B 已在未加 peer 时启动，应先停止其独立 launcher，再加 --peer 启动一次；之后通过运行时 peer 更新映射。不要把同 ID 初始测试目录 accept 到不同位置。
 
-默认自动下载固定官方 v2.1.7 并核对按平台/架构固定的 SHA-256。该版本 macOS 已实测；Windows 官方包校验及适配分支测试不等于原生 Windows 实测。也可 `--binary /已核实的官方/syncthing`；已有缓存不会替换，升级使用新的配置目录。未来下载不可用时现场核实官方发布，不跳过校验。端口冲突可选 `--gui-port`、`--listen-port`。`--no-discovery` 只用于显式地址的隔离局域网测试，公网穿透不要使用。
+默认自动下载固定官方 v2.1.7 并核对按平台/架构固定的 SHA-256。该版本 macOS 已实测；Windows 官方包校验及适配分支测试不等于原生 Windows 实测。也可 `--binary /已核实的官方/syncthing`；已有缓存不会替换，升级使用新的配置目录。未来下载不可用时现场核实官方发布，不跳过校验。默认继承代理环境，只有已诊断代理变量干扰时才显式使用 --bypass-proxy-env，仅影响本次 Syncthing 子进程；不为无代理/未接管设备添加该选项。端口冲突可选 `--gui-port`、`--listen-port`。`--no-discovery` 只用于显式地址的隔离局域网测试，公网穿透不要使用。
 
 macOS 的 Agent 需要跨消息保持进程时可按下例后台启动（Windows 前台运行示例见 platforms.md，不照搬 start_new_session），launcher 会自动记录父/子 PID、启动时间和命令，持有配置锁；其子进程也继承锁，意外残留时阻止重写配置：
 

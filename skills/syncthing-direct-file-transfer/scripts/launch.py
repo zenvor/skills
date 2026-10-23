@@ -35,6 +35,13 @@ def download_platform(system, machine):
     return systems[system], arches[machine.lower()]
 
 
+def child_environment(environment, bypass_proxy=False):
+    isolated = {'sthomedir', 'stconfdir', 'stdatadir', 'stguiaddress', 'stguiapikey'}
+    if bypass_proxy:
+        isolated.update({'http_proxy', 'https_proxy', 'all_proxy'})
+    return {key: value for key, value in environment.items() if key.lower() not in isolated}
+
+
 def write_state(root, state):
     temporary = root / ('.launcher-state.%d.tmp' % os.getpid())
     temporary.write_text(json.dumps(state), encoding='utf-8')
@@ -64,6 +71,7 @@ def main():
     parser.add_argument('--listen-port', type=int, default=22000)
     parser.add_argument('--no-discovery', action='store_true', help='For isolated LAN tests only')
     parser.add_argument('--sender', action='store_true')
+    parser.add_argument('--bypass-proxy-env', action='store_true', help='Only after diagnosing proxy interference; remove proxy variables for this Syncthing child only')
     args = parser.parse_args()
     PEER = args.peer
     if sys.platform not in ('darwin', 'win32'):
@@ -182,7 +190,7 @@ def main():
     if not args.sender and PEER:
         print('请把 MY_DEVICE_ID 发给协调方。对方设备已添加，无需输入临时连接码。', flush=True)
     # Preserve existing proxy paths; configure a Syncthing bypass only if traffic is intercepted.
-    env = {k: v for k, v in os.environ.items() if k.lower() not in ['http_proxy', 'https_proxy', 'all_proxy', 'sthomedir', 'stconfdir', 'stdatadir', 'stguiaddress', 'stguiapikey']}
+    env = child_environment(os.environ, args.bypass_proxy_env)
     log = (root / 'syncthing.log').open('a', encoding='utf-8')
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     api_key = gui.findtext('apikey')

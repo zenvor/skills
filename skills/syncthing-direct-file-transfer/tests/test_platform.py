@@ -21,6 +21,19 @@ import io
 
 
 class PlatformContracts(unittest.TestCase):
+    def test_proxy_environment_preserved_by_default_and_bypass_is_child_only(self):
+        inherited = {'HTTP_PROXY': 'http://proxy.test:8080', 'https_proxy': 'http://proxy.test:8080', 'All_Proxy': 'socks5://proxy.test:1080', 'NO_PROXY': 'localhost', 'STHOMEDIR': 'personal', 'STGUIAPIKEY': 'private', 'PATH': 'original'}
+        before = dict(inherited)
+        normal = launch.child_environment(inherited)
+        for key in ('HTTP_PROXY', 'https_proxy', 'All_Proxy', 'NO_PROXY'):
+            self.assertEqual(normal[key], inherited[key])
+        self.assertNotIn('STHOMEDIR', normal)
+        self.assertNotIn('STGUIAPIKEY', normal)
+        bypass = launch.child_environment(inherited, bypass_proxy=True)
+        self.assertFalse(any(k.lower() in ('http_proxy', 'https_proxy', 'all_proxy') for k in bypass))
+        self.assertEqual(bypass['NO_PROXY'], 'localhost')
+        self.assertEqual(inherited, before)
+
     def test_download_selection_rejects_unknown_architecture(self):
         self.assertEqual(launch.download_platform('win32', 'AMD64'), ('windows', 'amd64'))
         self.assertEqual(launch.download_platform('win32', 'ARM64'), ('windows', 'arm64'))
