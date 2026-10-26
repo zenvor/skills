@@ -1,0 +1,3 @@
+interface:
+  display_name: "VLESS XHTTP TLS 套 Cloudflare CDN"
+  short_description: "搭建并验收经 Cloudflare CDN 的 VLESS XHTTP TLS 节点"
