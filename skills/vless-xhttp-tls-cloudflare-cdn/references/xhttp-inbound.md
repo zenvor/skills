@@ -56,6 +56,8 @@ TLS、客户端和路径配好后启用入站，检查 Xray 状态、实际监�
 
 独立客户端的订阅只选择所需入站与用户。若聚合另一个 Reality 用户，先检查订阅对共同客户端和流量统计的限制，不能为让表单通过而把新用户关联到所有入站；必要时使用两个订阅，由支持的客户端本地聚合。
 
+`zenvor/3x-ui` 的 Subconverter 界面通过开启 **Traffic Stats** 显示 **Client** 选择框：仅导出独立用户时，选择目标 XHTTP 入站及该客户端，再配置 CDN Override。该实现关闭 Traffic Stats 会清除用户筛选，导出所选入站的全部可用客户端；保存后下载实际 provider，确认只包含预期用户。其他分支按其实际用户筛选机制处理。
+
 分享链接、配置文件或订阅/provider 都必须核对真实节点参数，并用实际导出节点完成 `SKILL.md` 中的代理验收。订阅下载入口即使使用 `8443`，其中的 XHTTP 节点仍使用既定公网入口。
 
 将导出节点转换为另一核心的测试配置时，也保留其 ALPN、TLS 指纹和 XHTTP 扩展参数。例如 `client-fingerprint` 对应 Xray 的 `tlsSettings.fingerprint`，`xhttp-opts.x-padding-bytes` 对应 `xhttpSettings.xPaddingBytes`；遗漏这些字段后的测试不能代表原导出配置。
