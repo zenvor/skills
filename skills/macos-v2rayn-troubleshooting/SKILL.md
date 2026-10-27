@@ -55,4 +55,12 @@ python3 scripts/diagnose.py --target-ip 192.179.26.109 --imap-host imap.gmail.co
 
 替换为当次目标。脚本仅查询本地连接元数据，可选执行无认证 IMAP 测试；不会修改配置或重启服务。
 
+脚本判定 CAPABILITY 成功需要非空的 untagged CAPABILITY 数据和匹配 tag 的 OK 完成响应；协议关键字忽略大小写，tag 精确匹配，并支持 PREAUTH greeting。修改脚本后运行离线回归：
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+```
+
+测试使用模拟 IMAP 流和临时本地 HTTP 服务，不访问邮箱、不读取真实代理凭据，也不修改系统配置；它不代替实际路径及 TLS 验证。
+
 参考：[sing-box Clash API](https://sing-box.sagernet.org/configuration/experimental/clash-api/)、[Mihomo Fake-IP](https://wiki.metacubex.one/config/dns/)、[curl 证书验证](https://curl.se/docs/sslcerts.html)、[Gmail IMAP](https://developers.google.com/workspace/gmail/imap/imap-smtp)。

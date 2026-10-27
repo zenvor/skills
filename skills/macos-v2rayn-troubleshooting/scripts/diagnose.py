@@ -9,6 +9,7 @@ import socket
 import ssl
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -20,6 +21,7 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def connections(config, target):
+    target = ipaddress.ip_address(target)
     controller = json.loads(config.read_text()).get('experimental', {}).get('clash_api', {})
     endpoint = controller.get('external_controller', '')
     url = urllib.parse.urlsplit('http://' + endpoint)
@@ -36,7 +38,11 @@ def connections(config, target):
     matches = []
     for item in data.get('connections', []):
         meta = item.get('metadata', {})
-        if meta.get('destinationIP') == target:
+        try:
+            destination = ipaddress.ip_address(meta.get('destinationIP'))
+        except ValueError:
+            continue
+        if destination == target:
             matches.append({
                 'id': item.get('id'), 'start': item.get('start'),
                 'process': meta.get('processPath'), 'host': meta.get('host'),
@@ -55,6 +61,13 @@ def exact(sock, size):
             raise ConnectionError('Unexpected SOCKS EOF')
         data += chunk
     return data
+
+
+def imap_line(stream):
+    line = stream.readline(8193)
+    if not line or len(line) > 8192 or not line.endswith(b'\r\n'):
+        raise ConnectionError('Invalid IMAP response line')
+    return line[:-2].split(None, 2)
 
 
 def probe_imap(host, socks_port=None):
@@ -83,21 +96,33 @@ def probe_imap(host, socks_port=None):
             exact(raw, length + 2)
         with ssl.create_default_context().wrap_socket(raw, server_hostname=host) as tls:
             with tls.makefile('rb') as stream:
-                greeting = stream.readline(8193)
-                if len(greeting) > 8192 or not greeting.startswith(b'* OK ') or not greeting.endswith(b'\n'):
+                greeting = imap_line(stream)
+                if len(greeting) != 3 or greeting[0] != b'*' or greeting[1].upper() not in (b'OK', b'PREAUTH'):
                     raise ConnectionError('Unexpected IMAP greeting')
                 tls.sendall(b'a1 CAPABILITY\r\n')
+                capabilities = []
                 for _ in range(25):
-                    line = stream.readline(8193)
-                    if not line or len(line) > 8192 or not line.endswith(b'\n'):
-                        raise ConnectionError('Invalid IMAP response')
-                    if line.startswith(b'a1 '):
-                        if not line.startswith(b'a1 OK '):
+                    parts = imap_line(stream)
+                    if len(parts) == 3 and parts[0] == b'*' and parts[1].upper() == b'CAPABILITY':
+                        capabilities.extend(parts[2].split())
+                    if parts and parts[0] == b'a1':
+                        if len(parts) != 3 or parts[1].upper() != b'OK':
                             raise ConnectionError('IMAP CAPABILITY rejected')
+                        if not capabilities:
+                            raise ConnectionError('Missing IMAP CAPABILITY data')
                         return {'path': 'socks' if socks_port else 'tun-or-system',
                                 'tls': tls.version(), 'certificate_verified': True,
                                 'greeting_ok': True, 'capability_ok': True}
                 raise ConnectionError('Too many IMAP response lines')
+
+
+def error_category(error):
+    if isinstance(error, urllib.error.HTTPError):
+        return 'HTTP ' + str(error.code)
+    if isinstance(error, ssl.SSLCertVerificationError):
+        return 'TLS certificate verification failed (code ' + str(error.verify_code) + ')'
+    # Exception messages may contain URLs, credentials, or server-supplied text.
+    return type(error).__name__
 
 
 def main():
@@ -121,14 +146,14 @@ def main():
             result = connections(args.config, str(args.target_ip))
             print(json.dumps({'time': datetime.datetime.now().astimezone().isoformat(), 'connections': result}, ensure_ascii=False), flush=True)
         except Exception as error:
-            print('Connection query failed: ' + type(error).__name__, file=sys.stderr)
+            print('Connection query failed: ' + error_category(error), file=sys.stderr)
             failed = True
     if args.imap_host:
         for port in (None, args.socks_port):
             try:
                 print(json.dumps(probe_imap(args.imap_host, port)), flush=True)
             except Exception as error:
-                print(('SOCKS' if port else 'TUN/system') + ' probe failed: ' + type(error).__name__, file=sys.stderr)
+                print(('SOCKS' if port else 'TUN/system') + ' probe failed: ' + error_category(error), file=sys.stderr)
                 failed = True
     return int(failed)
 
