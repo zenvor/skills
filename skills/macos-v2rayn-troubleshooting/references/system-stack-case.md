@@ -14,21 +14,21 @@
 
 下面的代码与该次安装的依赖版本对应：
 
-1. sing 在下载方向的复制正常结束后，会对来源连接执行 `CloseWrite()`，将 TCP 的写方向关闭；因此 `download closed` 并不必然表示下载阶段拨号失败。[CopyConn](https://github.com/SagerNet/sing/blob/5dc452e537bf/common/bufio/copy.go#L231)
+1. sing-box 1.14.4 的实际调用路径是 `NewConnection → connectionCopy`。下载方向复制正常结束后，connectionCopy 会对写入端（本地应用的入站连接）调用 `CloseWrite()`；返回错误时，用 `IsClosedOrCanceled` 将它分到 trace 或 error。这里直接产生 `connection download closed:` 日志，因此这行日志并不必然表示拨号失败。[NewConnection](https://github.com/SagerNet/sing-box/blob/v1.14.4/route/conn.go#L153)、[connectionCopy](https://github.com/SagerNet/sing-box/blob/v1.14.4/route/conn.go#L284-L320)
 2. gVisor 适配层的 CloseRead/CloseWrite 将底层 Shutdown 错误用 `errors.New(terr.String())` 包装为普通字符串错误。这种包装会丢失可供 errors.Is 判断的底层错误身份。[gVisor 适配层](https://github.com/SagerNet/gvisor/blob/v0.0.0-20260727.0-sing-box-mod.1/pkg/tcpip/adapters/gonet/gonet.go#L398)
 3. sing 的关闭错误识别包含标准 `syscall.ENOTCONN`，但同名字符串错误并不因此等同于这个标准错误。[关闭错误分类](https://github.com/SagerNet/sing/blob/5dc452e537bf/common/exceptions/error.go#L47)
-4. system 使用系统网络栈完成 TCP/IP 转换，从而避开该 gVisor 连接适配路径。[TUN 栈说明](https://sing-box.sagernet.org/configuration/inbound/tun/#stack)
+4. 该次依赖的 system 实现使用系统 listener 接收 TCP 连接，避开该 gVisor 连接适配路径。[固定版本 system 实现](https://github.com/SagerNet/sing-tun/blob/040db71fcd33/stack_system.go#L376-L389)、[TUN 栈说明](https://sing-box.sagernet.org/configuration/inbound/tun/#stack)
 
 这说明了一个与现场日志吻合的错误分类/兼容性机制，并支持替换实现的处理方向。未对每条历史连接抓包或取得调用栈，不能据此断言每条报错都由同一种关闭竞态引起，或确定是谁先关闭了连接。
 
-切换 system 改变了实际处理连接的实现，保留日志级别可以继续发现其他真实故障；它没有修改 gVisor 的源码。如果必须保留 gvisor，需要进一步验证并修复其错误转换路径，而不能直接过滤全部 endpoint not connected。
+切换 system 改变了实际处理连接的实现，保留了原日志配置，但没有修改 gVisor 的源码。标准关闭错误仍可能发生，并被上述实际日志路径识别后归入 trace；warn 订阅看不到这些 trace。现有证据不能区分“关闭方法不再返回错误”和“返回的关闭错误被正确识别为预期状态”，所以不能声称底层关闭错误已消失。如果必须保留 gvisor，需要进一步验证其错误转换路径；不能直接过滤全部 endpoint not connected，也不能把此替代方案称为已修复 gVisor 内部缺陷。
 
 ## 当次验证结果与限度
 
 - gvisor 基线观察 45 秒，捕捉到一条同类关闭错误。四次主动取消 TLS 请求均完成，但没有证明这四次取消本身能稳定复现原错误。
 - system 下重复四次主动取消 TLS 请求，未观察到同类错误。TUN 与 SOCKS 访问 Google/GitHub 分别得到正常的 204/200；正确域名与 SNI 的 Gmail TLS、IMAP greeting 和 CAPABILITY 验证通过。
-- 两段重叠的日志订阅覆盖切换后超过十一分钟，期间未收到新的 warn/error。首段五分钟；第二段持续到被跟踪的 GitHub 连接已保持 638 秒，仍有新增双向数据。
+- 两段重叠日志订阅的观测跨度超过十一分钟，已连接期间未收到新的 warn/error。首段五分钟；第二段持续到被跟踪的 GitHub 连接已保持 638 秒，仍有新增双向数据。脚本计时早于 WebSocket 建连，且没有累计重连间隙；采样点显示 logConnected=true，不能据此证明全程没有日志盲区。
 - Notes 的 993 连接也建立成功并有新增双向数据。没有读取笔记内容，也没有证明账户登录及内容同步全部完成。
-- 保持超过十分钟不等于观察到了该连接的正常关闭；因此结论是“当前版本和现场的替代实现验证有效”，不能写成“已证实永久根治”或“任何关闭错误都不会再出现”。
+- 保持超过十分钟不等于观察到了该连接的正常关闭；因此结论限定为“本次访问回归测试通过，观察窗口内未再收到同类错误”，不能写成“已证实永久根治”“底层关闭错误已经消失”或“任何关闭错误都不会再出现”。
 
 后续复用时先核对当前 sing-box 版本。官方文档已说明较新版本会改变 stack 选项及底层实现，不能盲目套用该次 1.14.4 的设置和源码解释。
