@@ -1,0 +1,28 @@
+# 示例地址和凭据必须替换；这是独立测试配置，不覆盖现用配置。
+mixed-port: 7890
+allow-lan: false
+bind-address: 127.0.0.1
+mode: rule
+log-level: info
+ipv6: false
+tun:
+  enable: false
+proxies:
+  - name: HY2-UDP
+    type: hysteria2
+    server: 192.0.2.1
+    port: 443
+    password: "REPLACE_WITH_CLIENT_AUTH"
+    sni: hy2.example.com
+    skip-cert-verify: false
+    alpn:
+      - h3
+    obfs: salamander
+    obfs-password: "REPLACE_WITH_SALAMANDER_PASSWORD"
+proxy-groups:
+  - name: HY2-TEST
+    type: select
+    proxies:
+      - HY2-UDP
+rules:
+  - MATCH,HY2-TEST

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hysteria2 UDP Salamander"
+  short_description: "在 3X-UI 中部署独立 Hysteria2 UDP 节点并验证混淆与实际连通性"
+  default_prompt: "使用 $hysteria2-udp-salamander 在现有 3X-UI 中创建独立 UDP 节点，保留原有服务，并完成真实代理验收。"
